@@ -1,0 +1,7 @@
+web3_conf:
+  mnemonic: ""
+  bsc_endpoint: "https://bsc-dataseed.binance.org/"
+  slippage: 990 ## 1% slippage
+  grids_num: 5
+  grid_upper_limmit: 10
+  grid_lower_limmit: 10
