@@ -1,9 +1,8 @@
 use crate::{ContractType, TradeBotNeed};
 use alloy::{
-    network::{Ethereum, EthereumWallet, Network},
+    network::EthereumWallet,
     primitives::{Address, U256},
-    providers::{Provider, ProviderBuilder},
-    signers::local::{coins_bip39::English, MnemonicBuilder},
+    providers::Provider,
     sol,
 };
 use anyhow::{anyhow, Context, Result};
@@ -50,7 +49,7 @@ impl<P: Provider> TradeBotNeed<P> for CESSToken<P> {
         Ok(balance_num_u256)
     }
 
-    async fn allowance(&self, owner: Option<Address>, spender: Address) -> Result<(bool, U256)> {
+    async fn allowance(&self, owner: Option<Address>, spender: Address) -> Result<U256> {
         let allowance_number = match owner {
             Some(owner) => self
                 .contract
@@ -65,11 +64,7 @@ impl<P: Provider> TradeBotNeed<P> for CESSToken<P> {
                 .await
                 .context("call allowance failed")?,
         };
-        if allowance_number == U256::MAX {
-            return Ok((true, U256::ZERO));
-        } else {
-            return Ok((false, allowance_number));
-        }
+        Ok(allowance_number)
     }
     async fn approve(&self, spender: Address) -> Result<String> {
         let tx_hash = self

@@ -1,6 +1,6 @@
 use crate::{ContractType, TradeBotNeed};
 use alloy::{
-    network::EthereumWallet,
+    network::{EthereumWallet},
     primitives::{Address, U256},
     providers::Provider,
     sol,
@@ -8,11 +8,11 @@ use alloy::{
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 
-pub const WBNB_ADDRESS: &str = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
+pub const USDT_ADDRESS: &str = "0x55d398326f99059fF775485246999027B3197955";
 
 sol! {
     #[sol(rpc)]
-    contract WBNB {
+    contract USDT {
         function balanceOf(address owner) public view returns (uint256);
         function allowance(address owner, address spender) public view returns (uint256);
         function approve(address guy, uint wad) public returns (bool);
@@ -20,23 +20,23 @@ sol! {
 }
 
 #[derive(Debug, Clone)]
-pub struct WBNBToken<P: Provider> {
+pub struct USDTToken<P: Provider> {
     provider: P,
-    contract: WBNB::WBNBInstance<P>,
+    contract: USDT::USDTInstance<P>,
     pub wallet: EthereumWallet,
 }
 
 #[async_trait]
-impl<P: Provider> TradeBotNeed<P> for WBNBToken<P> {
+impl<P: Provider> TradeBotNeed<P> for USDTToken<P> {
     fn new(provider: P, contract: ContractType<P>, wallet: EthereumWallet) -> Result<Self> {
         match contract {
-            ContractType::WBNB(contract) => Ok(Self {
+            ContractType::USDT(contract) => Ok(Self {
                 provider,
                 contract,
                 wallet,
             }),
             _ => Err(anyhow!(
-                "please new WBNB token client with correct contract type"
+                "please new USDT token client with correct contract type"
             )),
         }
     }
@@ -47,7 +47,7 @@ impl<P: Provider> TradeBotNeed<P> for WBNBToken<P> {
             .balanceOf(address)
             .call()
             .await
-            .context("get WBNB balance failed")?;
+            .context("get USDT balance failed")?;
         Ok(balance_num_u256)
     }
 

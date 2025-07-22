@@ -1,13 +1,15 @@
 use crate::{
-    smartswap::{IQuoterV2::QuoteExactOutputSingleParams, IV3SwapRouter::ExactInputSingleParams},
+    smartswap::{
+        IQuoterV2::QuoteExactOutputSingleParams,
+        IV3SwapRouter::{ExactInputParams, ExactInputSingleParams, ExactOutputParams},
+    },
+    utils::*,
     ContractType, DexRouter,
 };
 use alloy::{
-    dyn_abi::abi::{self, token},
-    network::{Ethereum, EthereumWallet, Network},
-    primitives::{utils::format_ether, Address, Bytes, U160, U256},
-    providers::{Provider, ProviderBuilder},
-    signers::local::{coins_bip39::English, MnemonicBuilder},
+    network::EthereumWallet,
+    primitives::{Address, Bytes, U160, U256},
+    providers::{Provider, },
     sol,
 };
 use anyhow::{anyhow, Context, Result};
@@ -89,7 +91,7 @@ impl<P: Provider> DexRouter<P> for PancakeswapContract<P> {
         }
     }
     async fn check_price(&self, token0: Address, token1: Address) -> Result<PriceCheckResult> {
-        let amount_out = U256::from_str_radix("1000000000000000000", 10)?;
+        let amount_out = get_u256_token(18);
         let param = QuoteExactOutputSingleParams {
             tokenIn: token1,
             tokenOut: token0,
@@ -104,19 +106,38 @@ impl<P: Provider> DexRouter<P> for PancakeswapContract<P> {
             .call()
             .await
             .context("get price failed")?;
-        println!("转换为 Token1:{} Token0", format_ether(result.amountIn));
-        println!("need gas: {}", format_ether(result.gasEstimate));
         let result = PriceCheckResult {
             price: result.amountIn,
             gas_estimate: result.gasEstimate,
         };
         Ok(result)
     }
+    async fn check_price_with_multi_hop(
+        &self,
+        path: Vec<Address>,
+        fee: Vec<u32>,
+        amount_out: U256,
+    ) -> Result<PriceCheckResult> {
+        let trade_path = build_multi_hop_swap_path(path, fee)?;
+
+        let get_price_reulst = self
+            .quoter
+            .quoteExactOutput(trade_path.into(), amount_out)
+            .call()
+            .await
+            .context("get price with price failed")?;
+        let result = PriceCheckResult {
+            price: get_price_reulst.amountIn,
+            gas_estimate: get_price_reulst.gasEstimate,
+        };
+
+        Ok(result)
+    }
     async fn swap_exact_tokens_for_tokens(
         &self,
         token0: Address,
         token1: Address,
-        amount: U256,
+        amount_in: U256,
         amount_out_min: U256,
     ) -> Result<String> {
         let params = ExactInputSingleParams {
@@ -124,7 +145,7 @@ impl<P: Provider> DexRouter<P> for PancakeswapContract<P> {
             tokenOut: token1,
             fee: Uint::from(100),
             recipient: self.wallet.default_signer().address(),
-            amountIn: amount,
+            amountIn: amount_in,
             amountOutMinimum: amount_out_min,
             sqrtPriceLimitX96: Uint::ZERO,
         };
@@ -138,7 +159,80 @@ impl<P: Provider> DexRouter<P> for PancakeswapContract<P> {
             .tx_hash()
             .to_vec();
 
-        println!("result is {}", hex::encode(tx_hash));
-        Ok("".to_string())
+        Ok(hex::encode(tx_hash))
     }
+    async fn swap_exact_inpute_tokens_for_tokens_with_multi_hop(
+        &self,
+        path: Vec<Address>,
+        fee: Vec<u32>,
+        amount_in: U256,
+        amount_out_min: U256,
+    ) -> Result<String> {
+        let trade_path = build_multi_hop_swap_path(path, fee)?;
+
+        let params = ExactInputParams {
+            path: trade_path,
+            recipient: self.wallet.default_signer().address(),
+            amountIn: amount_in,
+            amountOutMinimum: amount_out_min,
+        };
+
+        let tx_hash = self
+            .router
+            .exactInput(params)
+            .send()
+            .await
+            .context("multi hop swap failed")?
+            .tx_hash()
+            .to_vec();
+
+        Ok(hex::encode(tx_hash))
+    }
+
+    async fn swap_exact_outpute_tokens_for_tokens_with_multi_hop(
+        &self,
+        path: Vec<Address>,
+        fee: Vec<u32>,
+        amount_out: U256,
+        amount_in_max: U256,
+    ) -> Result<String> {
+        let trade_path = build_multi_hop_swap_path(path, fee)?;
+        let params = ExactOutputParams {
+            path: trade_path,
+            recipient: self.wallet.default_signer().address(),
+            amountOut: amount_out,
+            amountInMaximum: amount_in_max,
+        };
+
+        let tx_hash = self
+            .router
+            .exactOutput(params)
+            .send()
+            .await
+            .context("multi hop swap failed")?
+            .tx_hash()
+            .to_vec();
+
+        Ok(hex::encode(tx_hash))
+    }
+}
+
+fn build_multi_hop_swap_path(path: Vec<Address>, fee: Vec<u32>) -> Result<Bytes> {
+    if path.len() != fee.len() + 1 {
+        return Err(anyhow!("path and fee length not match"));
+    }
+    let mut fee = fee.clone();
+    let mut trade_path: Vec<u8> = Vec::new();
+    let mut counter = 0;
+    for address in path.clone() {
+        counter += 1;
+        trade_path.extend_from_slice(address.as_slice());
+
+        if !(counter == path.len()) {
+            let fee_rate: Uint<24, 1> = Uint::from(fee.remove(0));
+            let fee_rate_byte = fee_rate.to_be_bytes_vec();
+            trade_path.extend_from_slice(&fee_rate_byte);
+        }
+    }
+    Ok(trade_path.into())
 }

@@ -11,6 +11,9 @@ pub struct Web3 {
     pub bsc_endpoint: String,
     pub slippage: u64,
     pub grids_num: u128,
-    pub grid_upper_limmit: u128,
-    pub grid_lower_limmit: u128,
+    pub grid_upper_limmit: f64,
+    pub grid_lower_limmit: f64,
+    pub deposit_usdt: f64,
+    pub deposit_cess: f64,
+    pub price_tolerance_slippage:u64
 }

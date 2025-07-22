@@ -34,5 +34,6 @@ alloy = { version = "1.0.16", features = [
 async-trait = "0.1"
 ruint = "1.15"
 serde_yaml = "0.9.33"
-dashmap = "5"
+log = "0.4.14"
+env_logger = "0.11"
 pancakeswap = { path = "crates/pancakeswap" }

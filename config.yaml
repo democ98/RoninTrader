@@ -2,6 +2,9 @@ web3_conf:
   mnemonic: ""
   bsc_endpoint: "https://bsc-dataseed.binance.org/"
   slippage: 990 ## 1% slippage
-  grids_num: 5
-  grid_upper_limmit: 10
-  grid_lower_limmit: 10
+  grids_num: 10
+  grid_upper_limmit: 0.0075
+  grid_lower_limmit: 0.0065
+  deposit_usdt: 6
+  deposit_cess: 400
+  price_tolerance_slippage: 995 ## 0.5% slippage.This means that any trade near this tolerance level will be triggered.

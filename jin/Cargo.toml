@@ -11,4 +11,5 @@ anyhow = { workspace = true }
 alloy = { workspace = true }
 serde = { workspace = true }
 serde_yaml = { workspace = true }
-dashmap = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
