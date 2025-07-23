@@ -391,9 +391,9 @@ where
     );
     trade_params.price_queue.print_from_head();
 
-    // //buy cess token
-    // let amount = (trade_params.use_usdt_per_seg.clone() / cess_latest_price) * get_u256_token(18);
-    // let tx_hash = buy_cess_using_usdt(&pancakeswap_contract, amount, trade_params.slippage).await?;
+    //buy cess token
+    // let cess_amount = (trade_params.use_usdt_per_seg.clone() / cess_latest_price) * get_u256_token(18);
+    // let tx_hash = buy_cess_using_usdt(&pancakeswap_contract, trade_params.use_usdt_per_seg ,cess_amount , trade_params.slippage).await?;
     // info!("buy cess tx_hash is {:?}", tx_hash);
 
     // //sell cess token
@@ -420,7 +420,8 @@ where
         let cess_price = check_cess_to_usdt_price(&pancakeswap_contract).await?;
         info!("[🔎]CESS new price is :{:?}",format_ether(cess_price));
         for node in &trade_params.price_queue {
-            let node_data = node.borrow();
+            let mut node_data = node.borrow_mut();
+            let mut is_trigger = false ;
             match &node_data.order_task {
                 Some(order) => {
                     //check if in the price range
@@ -432,16 +433,14 @@ where
                             },
                             None => {
                                 //Haven't order task,use use_usdt_per_seg/cess_price to compute how many cess token need be traded.
-                                add_task=true;
-                                trade_params.use_usdt_per_seg.clone()/cess_price
+                                (trade_params.use_usdt_per_seg/cess_price)*get_u256_token(18)
                             },
                         };
 
                         match order.destination {
                             TradeDestination::BUY => {
-                                let tx_hash = buy_cess_using_usdt(&pancakeswap_contract, amount, trade_params.slippage).await?;
-                                info!("[BUY💸]Price:{:?} triggered.Buy cess token with amount:{:?},Transaction hash is:{:?}",format_ether(cess_price),amount,tx_hash);
-                                if add_task {
+                                let tx_hash = buy_cess_using_usdt(&pancakeswap_contract,trade_params.use_usdt_per_seg, amount, trade_params.slippage).await?;
+                                info!("[BUY💸]Price:{:?} triggered.Buy cess token with amount:{:?},Transaction hash is:{:?}",format_ether(node_data.this_price),format_ether(amount),tx_hash);
                                     match &node_data.next_price {
                                         Some(next_node) => {
                                             let sell_task = Order {
@@ -458,20 +457,18 @@ where
                                             bail!("A buy order occurred at the last price level, which shouldn't happen!!")
                                         }
                                     }
-                                }
                             }
                             TradeDestination::SELL => {
                                 let cess_to_sell = amount;
-                                let cess_max_willing_pay = slippage_compute_max(&cess_to_sell,trade_params.slippage)*get_u256_token(18);
-                                let usdt_amount_received = cess_to_sell*cess_price;
+                                let cess_max_willing_pay = slippage_compute_max(&cess_to_sell,trade_params.slippage);
+                                let usdt_amount_received = ((cess_to_sell)*(cess_price))/get_u256_token(18);
                                 let tx_hash = sell_cess_get_usdt(
                                     &pancakeswap_contract,
                                     cess_max_willing_pay,
                                     usdt_amount_received,
                                 )
                                 .await?;
-                                info!("[SELL💰]Price:{:?} triggered.Sell CESS token with amount:{:?},Transaction hash is:{:?}",format_ether(cess_price),amount,tx_hash);
-                                if add_task {
+                                info!("[SELL💰]Price:{:?} triggered.Sell CESS token with amount:{:?},Transaction hash is:{:?}",format_ether(node_data.this_price),format_ether(amount),tx_hash);
                                     match &node_data.previous_price {
                                         Some(privious_node) => {
                                             match privious_node.upgrade() {
@@ -497,17 +494,21 @@ where
                                             bail!("A sell trade occurred at the first price level, which shouldn't happen!!")
                                         }
                                     }
-                                }
+                                
                             },
                         }
                         //set this node order task to None
-                        node.borrow_mut().order_task = None;
+                        node_data.order_task = None;
+                        is_trigger=true;
                         break
                     }
                 },
                 None => {
-                    info!("⌛No order tasks found, indicating that the price has not fluctuated to any actionable level~~")
+                    // info!("⌛No order tasks found, indicating that the price has not fluctuated to any actionable level~~")
                 },
+            }
+            if node_data.next_price.is_none() && !is_trigger{
+                info!("⌛No order tasks found, indicating that the price has not fluctuated to any actionable level~~")
             }
         }
         
@@ -535,7 +536,8 @@ async fn check_cess_to_usdt_price<P: Provider + Clone>(
 
 async fn buy_cess_using_usdt<P: Provider + Clone>(
     pancakeswap_contract: &PancakeswapContract<P>,
-    amount:U256,
+    usdt_use:U256,
+    cess_amount:U256,
     slippage: u64,
 ) -> Result<String> {
     let path = vec![
@@ -544,18 +546,18 @@ async fn buy_cess_using_usdt<P: Provider + Clone>(
         Address::from_str(CESS_ADDRESS)?,
     ];
     let fee = vec![100_u32, 100_u32];
-    let cess_min_received = slippage_compute_min(&amount,slippage);
+    let cess_min_received = slippage_compute_min(&cess_amount,slippage);
 
-    info!(
-        "cess should received :{:?}",
-        format_ether(amount)
-    );
-    info!("cess min received :{:?}", format_ether(cess_min_received));
+    // info!(
+    //     "cess should received :{:?}",
+    //     format_ether(cess_amount)
+    // );
+    // info!("cess min received :{:?}", format_ether(cess_min_received));
     let tx_hash = pancakeswap_contract
         .swap_exact_inpute_tokens_for_tokens_with_multi_hop(
             path,
             fee,
-            amount,
+            usdt_use,
             cess_min_received,
         )
         .await?;
@@ -573,10 +575,11 @@ async fn sell_cess_get_usdt<P: Provider + Clone>(
         Address::from_str(CESS_ADDRESS)?,
     ];
     let fee = vec![100_u32, 100_u32];
-    info!(
-        "usdt want to received :{:?}",
-        format_ether(amount_received)
-    );
+    // info!(
+    //     "usdt want to received :{:?}",
+    //     format_ether(amount_received)
+    // );
+    // info!("CESS max pay is :{:?}",format_ether(cess_max_willing_pay));
     let tx_hash = pancakeswap_contract
         .swap_exact_outpute_tokens_for_tokens_with_multi_hop(
             path,
