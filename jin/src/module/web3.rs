@@ -1,8 +1,6 @@
 use pancakeswap::{
-    cess::CESSToken,
     smartswap::PancakeswapContract,
-    usdt::USDTToken,
-    wbnb::WBNBToken,
+    bep_20::BEP20TOKEN,
 };
 
 use alloy::{
@@ -10,11 +8,11 @@ use alloy::{
     providers::Provider,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Web3State<P: Provider> {
-    pub wbnb_token: WBNBToken<P>,
-    pub cess_token: CESSToken<P>,
-    pub usdt_token: USDTToken<P>,
+    pub wbnb_token: BEP20TOKEN<P>,
+    pub cess_token: BEP20TOKEN<P>,
+    pub usdt_token: BEP20TOKEN<P>,
     pub pancakeswap_contract: PancakeswapContract<P>,
 
     pub slippage: u64,

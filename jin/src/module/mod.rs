@@ -10,47 +10,30 @@ use alloy::{
 use anyhow::{Result, anyhow};
 use pancakeswap::{
     ContractType, DexRouter, TradeBotNeed,
-    cess::{CESS, CESS_ADDRESS, CESSToken},
     smartswap::{
         PANCAKE_SWAP_QUOTER_V2, PANCAKE_SWAP_SMART_ROUTER_V3, PancakeswapBundle,
         PancakeswapContract, QUOTER_V2, SMART_ROUTER_V3,
     },
-    usdt::{USDT, USDT_ADDRESS, USDTToken},
     utils::*,
-    wbnb::{WBNB, WBNB_ADDRESS, WBNBToken},
+    bep_20::{TokenType,BEP20TOKEN,USDT_ADDRESS,WBNB_ADDRESS,CESS_ADDRESS}
 };
 use web3::Web3State;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct JinCore<P: Provider + Clone> {
     pub web3_state: Option<Web3State<P>>,
 }
 
 impl<P: Provider + Clone> JinCore<P> {
     pub async fn new(provider: P, wallet: EthereumWallet) -> Result<Self> {
-        let usdt_contract =
-            USDT::USDTInstance::new(Address::from_str(USDT_ADDRESS)?, provider.clone());
-        let usdt_token = USDTToken::new(
-            provider.clone(),
-            ContractType::USDT(usdt_contract),
-            wallet.clone(),
-        )?;
+        let usdt_contract = TokenType::USDT(Address::from_str(USDT_ADDRESS)?);
+        let usdt_token = BEP20TOKEN::new(provider.clone(), usdt_contract, wallet.clone())?;
 
-        let wbnb_contract =
-            WBNB::WBNBInstance::new(Address::from_str(WBNB_ADDRESS)?, provider.clone());
-        let wbnb_token = WBNBToken::new(
-            provider.clone(),
-            ContractType::WBNB(wbnb_contract),
-            wallet.clone(),
-        )?;
+        let wbnb_contract = TokenType::WBNB(Address::from_str(WBNB_ADDRESS)?);
+        let wbnb_token = BEP20TOKEN::new(provider.clone(), wbnb_contract, wallet.clone())?;
 
-        let cess_contract =
-            CESS::CESSInstance::new(Address::from_str(CESS_ADDRESS)?, provider.clone());
-        let cess_token = CESSToken::new(
-            provider.clone(),
-            ContractType::CESS(cess_contract),
-            wallet.clone(),
-        )?;
+        let cess_contract = TokenType::CESS(Address::from_str(CESS_ADDRESS)?);
+        let cess_token = BEP20TOKEN::new(provider.clone(), cess_contract, wallet.clone())?;
 
         let pancakeswap_bundle = PancakeswapBundle {
             quoter: QUOTER_V2::QUOTER_V2Instance::new(

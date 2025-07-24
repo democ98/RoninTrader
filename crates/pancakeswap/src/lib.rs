@@ -1,9 +1,6 @@
-pub mod cess;
 pub mod utils;
-pub(crate) mod helper;
 pub mod smartswap;
-pub mod usdt;
-pub mod wbnb;
+pub mod bep_20;
 use alloy::{
     dyn_abi::abi::token,
     hex,
@@ -15,15 +12,14 @@ use alloy::{
 };
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use cess::CESS;
 use ruint::aliases::U256;
 use smartswap::PriceCheckResult;
 use std::{marker::PhantomData, str::FromStr};
-use usdt::USDT;
-use wbnb::WBNB;
+
 pub struct ContractAccessor<N: Network> {
     _networ: PhantomData<N>,
 }
+use bep_20::{TokenType,WBNB,CESS,USDT};
 
 #[derive(Clone)]
 pub enum ContractType<P: Provider> {
@@ -47,7 +43,7 @@ pub async fn create_eth_provider(
     let wallet = EthereumWallet::from(signer);
 
     let provider = ProviderBuilder::new()
-        .wallet(wallet.clone())
+        .wallet(wallet.clone())          
         .connect(rpc_url)
         .await
         .context("connect to provider failed")?;
@@ -57,11 +53,11 @@ pub async fn create_eth_provider(
 
 #[async_trait]
 pub trait TradeBotNeed<P: Provider> {
-    fn new(provider: P, contract: ContractType<P>, wallet: EthereumWallet) -> Result<Self>
+    fn new(provider: P, contract: TokenType, wallet: EthereumWallet) -> Result<Self>
     where
         Self: Sized;
     async fn balance_of(&self, address: Address) -> Result<U256>;
-    async fn allowance(&self, owner: Option<Address>, spender: Address) -> Result<U256>;
+    async fn allowance(&self, spender: Address) -> Result<U256>;
     async fn approve(&self, spender: Address) -> Result<String>;
 }
 
