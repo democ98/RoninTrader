@@ -15,5 +15,6 @@ pub struct Web3 {
     pub grid_lower_limmit: f64,
     pub deposit_usdt: f64,
     pub deposit_cess: f64,
-    pub price_tolerance_slippage:u64
+    pub price_tolerance_slippage: u64,
+    pub trade_record_path: String,
 }

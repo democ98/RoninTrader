@@ -1,16 +1,12 @@
 mod module;
-mod tactics;
+mod trading;
 mod utils;
-use alloy::{
-    primitives::U256,
-};
+use alloy::primitives::U256;
 use anyhow::Result;
-use std::{fs};
+use std::fs;
 
 use module::{JinCore, config::AppConfig};
-use pancakeswap::{
-    create_eth_provider,
-};
+use pancakeswap::create_eth_provider;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -22,8 +18,8 @@ async fn main() -> Result<()> {
         config.web3_conf.mnemonic.clone(),
     )
     .await?;
-    let mut jin_core = JinCore::new(provider.clone(), wallet.clone()).await?;
-    jin_core.set_trade_params(
+    let mut jin_core = JinCore::new_jin();
+    jin_core.set_strategy_configuration(
         config.web3_conf.slippage,
         U256::from(config.web3_conf.grids_num),
         config.web3_conf.grid_upper_limmit,
@@ -31,9 +27,12 @@ async fn main() -> Result<()> {
         config.web3_conf.deposit_usdt,
         config.web3_conf.deposit_cess,
         config.web3_conf.price_tolerance_slippage,
+        config.web3_conf.trade_record_path,
     )?;
+    jin_core.with_web3_trader(provider, wallet).await?;
 
-    tactics::trader_runner(jin_core).await?;
+    jin_core.start_web3_trade_task().await?;
+
     Ok(())
 }
 
