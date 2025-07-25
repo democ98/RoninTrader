@@ -9,3 +9,4 @@ alloy = { workspace = true }
 async-trait = { workspace = true }
 ruint = { workspace = true }
 hex = { workspace = true }
+tokio = { workspace = true }

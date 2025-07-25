@@ -9,7 +9,7 @@ use crate::{
 use alloy::{
     network::EthereumWallet,
     primitives::{Address, Bytes, U160, U256},
-    providers::{Provider, },
+    providers::Provider,
     sol,
 };
 use anyhow::{anyhow, Context, Result};
@@ -235,4 +235,143 @@ fn build_multi_hop_swap_path(path: Vec<Address>, fee: Vec<u32>) -> Result<Bytes>
         }
     }
     Ok(trade_path.into())
+}
+
+mod test {
+    use std::str::FromStr;
+
+    use alloy::primitives::{utils::format_ether, Address};
+    use anyhow::Result;
+
+    use crate::{
+        bep_20::{CESS_ADDRESS, USDT_ADDRESS, WBNB_ADDRESS},
+        create_eth_provider,
+        smartswap::{
+            PancakeswapBundle, PancakeswapContract, PANCAKE_SWAP_QUOTER_V2,
+            PANCAKE_SWAP_SMART_ROUTER_V3, QUOTER_V2, SMART_ROUTER_V3,
+        },
+        utils::{f64_to_u256, get_u256_token},
+        ContractType, DexRouter,
+    };
+    #[tokio::test]
+    async fn test_swap_exact_tokens_for_tokens() -> Result<()> {
+        let mnemonic = std::env::var("Mnemonic").expect("Mnemonic is not set");
+        let (provider, wallet) =
+            create_eth_provider("https://bsc-dataseed.binance.org/", mnemonic).await?;
+
+        let pancakeswap_bundle = PancakeswapBundle {
+            quoter: QUOTER_V2::QUOTER_V2Instance::new(
+                Address::from_str(PANCAKE_SWAP_QUOTER_V2)?,
+                provider.clone(),
+            ),
+            router: SMART_ROUTER_V3::SMART_ROUTER_V3Instance::new(
+                Address::from_str(PANCAKE_SWAP_SMART_ROUTER_V3)?,
+                provider.clone(),
+            ),
+        };
+
+        let pancakeswap_contract = PancakeswapContract::new(
+            provider.clone(),
+            ContractType::SmartSwap(pancakeswap_bundle),
+            wallet.clone(),
+        )?;
+
+        let path = vec![
+            Address::from_str(CESS_ADDRESS)?,
+            Address::from_str(WBNB_ADDRESS)?,
+            Address::from_str(USDT_ADDRESS)?,
+        ];
+        let fee = vec![100_u32, 100_u32];
+        let amount_out = get_u256_token(18);
+        let price_result = pancakeswap_contract
+            .check_price_with_multi_hop(path.clone(), fee.clone(), amount_out)
+            .await?;
+        println!("price result: {:#?}", format_ether(price_result.price));
+
+        Ok(())
+    }
+    #[tokio::test]
+    async fn test_check_price() -> Result<()> {
+        let mnemonic = std::env::var("Mnemonic").expect("Mnemonic is not set");
+        let (provider, wallet) =
+            create_eth_provider("https://bsc-dataseed.binance.org/", mnemonic).await?;
+
+        let pancakeswap_bundle = PancakeswapBundle {
+            quoter: QUOTER_V2::QUOTER_V2Instance::new(
+                Address::from_str(PANCAKE_SWAP_QUOTER_V2)?,
+                provider.clone(),
+            ),
+            router: SMART_ROUTER_V3::SMART_ROUTER_V3Instance::new(
+                Address::from_str(PANCAKE_SWAP_SMART_ROUTER_V3)?,
+                provider.clone(),
+            ),
+        };
+
+        let pancakeswap_contract = PancakeswapContract::new(
+            provider.clone(),
+            ContractType::SmartSwap(pancakeswap_bundle),
+            wallet.clone(),
+        )?;
+        let price_result = pancakeswap_contract
+            .check_price(
+                Address::from_str(WBNB_ADDRESS)?,
+                Address::from_str(CESS_ADDRESS)?,
+            )
+            .await?;
+        println!("price result: {:?}", format_ether(price_result.price));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_swap_exact_inpute_tokens_for_tokens_with_multi_hop() -> Result<()> {
+        let mnemonic = std::env::var("Mnemonic").expect("Mnemonic is not set");
+        let (provider, wallet) =
+            create_eth_provider("https://bsc-dataseed.binance.org/", mnemonic).await?;
+        let pancakeswap_bundle = PancakeswapBundle {
+            quoter: QUOTER_V2::QUOTER_V2Instance::new(
+                Address::from_str(PANCAKE_SWAP_QUOTER_V2)?,
+                provider.clone(),
+            ),
+            router: SMART_ROUTER_V3::SMART_ROUTER_V3Instance::new(
+                Address::from_str(PANCAKE_SWAP_SMART_ROUTER_V3)?,
+                provider.clone(),
+            ),
+        };
+
+        let pancakeswap_contract = PancakeswapContract::new(
+            provider.clone(),
+            ContractType::SmartSwap(pancakeswap_bundle),
+            wallet.clone(),
+        )?;
+
+        let path = vec![
+            Address::from_str(USDT_ADDRESS)?,
+            Address::from_str(WBNB_ADDRESS)?,
+            Address::from_str(CESS_ADDRESS)?,
+        ];
+
+        let fee = vec![100_u32, 100_u32];
+        let usdt_use = f64_to_u256(0.5, 18);
+
+        let price_result = pancakeswap_contract
+            .check_price_with_multi_hop(
+                vec![
+                    Address::from_str(CESS_ADDRESS)?,
+                    Address::from_str(WBNB_ADDRESS)?,
+                    Address::from_str(USDT_ADDRESS)?,
+                ],
+                fee.clone(),
+                get_u256_token(18),
+            )
+            .await?;
+        let amount_out_min = (usdt_use / price_result.price) * get_u256_token(18);
+        println!("0.5u can get {}CESS", format_ether(amount_out_min));
+        let tx_hash = pancakeswap_contract
+            .swap_exact_inpute_tokens_for_tokens_with_multi_hop(path, fee, usdt_use, amount_out_min)
+            .await?;
+        println!("tx_hash: {}", tx_hash);
+
+        Ok(())
+    }
 }

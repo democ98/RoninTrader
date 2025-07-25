@@ -3287,6 +3287,7 @@ dependencies = [
  "async-trait",
  "hex",
  "ruint",
+ "tokio",
 ]
 
 [[package]]
